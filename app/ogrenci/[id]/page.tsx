@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { db } from "@/lib/firebase";
-import { doc, getDoc, collection, getDocs, addDoc } from "firebase/firestore";
+import { doc, getDoc, collection, addDoc } from "firebase/firestore"; // collection sadece sonuç kaydetmek için kaldı
 import { useParams, useRouter } from "next/navigation";
 
 export default function StudentExamPage() {
@@ -33,19 +33,14 @@ export default function StudentExamPage() {
           const data = examSnap.data();
           setExamData(data);
           setTimeLeft(data.duration * 60);
+
+          // YENİ KISIM: Soruları direkt veriden alıyoruz, başka sorgu yok!
+          const qList = data.questions || [];
+          setQuestions(qList);
         } else {
           alert("Sınav bulunamadı!");
           router.push("/");
         }
-
-        const qRef = collection(db, "exams", id, "questions");
-        const qSnap = await getDocs(qRef);
-        const qList = qSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-        // DÜZELTME 1: Sıralama yaparken tarih yoksa çökmesini engelledik (Güvenli Sıralama)
-        qList.sort((a: any, b: any) => (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0));
-
-        setQuestions(qList);
       } catch (err) {
         console.error("Veri hatası:", err);
       } finally {
@@ -62,7 +57,6 @@ export default function StudentExamPage() {
       setTimeLeft((prev) => {
         if (prev <= 1) {
           clearInterval(timer);
-          // DÜZELTME 2: Süre bittiyse (forceFinish = true) onayı atla
           finishExam(true);
           return 0;
         }
@@ -95,11 +89,8 @@ export default function StudentExamPage() {
     setIsExamStarted(true);
   };
 
-  // --- DÜZELTME 3: forceFinish parametresi eklendi (Zaman dolunca sormadan bitirir) ---
   const finishExam = async (forceFinish = false) => {
-    // Eğer zorla bitirilmiyorsa (yani butona basıldıysa) ve süre varsa Onay İste
     if (!forceFinish && timeLeft > 0 && !confirm("Sınavı bitirmek istediğinize emin misiniz?")) return;
-
     setLoading(true);
 
     let tbtCorrect = 0, tbtIncorrect = 0, tbtEmpty = 0;
@@ -157,7 +148,6 @@ export default function StudentExamPage() {
 
   if (loading) return <div className="h-screen flex items-center justify-center text-blue-600 font-bold">Yükleniyor...</div>;
 
-  // DÜZELTME 4: Eğer sorular yüklenmediyse veya boşsa çökmemesi için kontrol
   if (isExamStarted && questions.length === 0) {
     return (
       <div className="h-screen flex flex-col items-center justify-center text-gray-500">

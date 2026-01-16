@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { db, storage } from "@/lib/firebase";
-import { doc, getDoc, collection, addDoc, getDocs, deleteDoc } from "firebase/firestore";
+import { doc, getDoc, updateDoc } from "firebase/firestore"; // collection, addDoc SİLİNDİ, updateDoc GELDİ
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
@@ -13,12 +13,12 @@ export default function ExamDetailPage() {
   const router = useRouter();
 
   const [examTitle, setExamTitle] = useState("");
-  const [questions, setQuestions] = useState<any[]>([]);
+  const [questions, setQuestions] = useState<any[]>([]); // Sorular artık burada tutuluyor
   const [loading, setLoading] = useState(false);
 
   // Form Verileri
   const [qText, setQText] = useState("");
-  const [category, setCategory] = useState("Temel"); // YENİ: Kategori (Varsayılan Temel)
+  const [category, setCategory] = useState("Temel");
   const [options, setOptions] = useState(["", "", "", "", ""]);
   const [correct, setCorrect] = useState(0);
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -30,6 +30,7 @@ export default function ExamDetailPage() {
     }
   }, [router]);
 
+  // Sayfa açılınca verileri çek (ARTIK TEK SEFERDE ÇEKİYORUZ)
   useEffect(() => {
     const fetchData = async () => {
       if (!id) return;
@@ -37,26 +38,18 @@ export default function ExamDetailPage() {
         const docRef = doc(db, "exams", id);
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
-          setExamTitle(docSnap.data().title);
+          const data = docSnap.data();
+          setExamTitle(data.title);
+          // Eğer önceden eklenmiş sorular varsa onları state'e atıyoruz
+          // Eğer yoksa boş dizi başlatıyoruz
+          setQuestions(data.questions || []);
         }
-        fetchQuestions();
       } catch (error) {
         console.error("Veri çekme hatası:", error);
       }
     };
     fetchData();
   }, [id]);
-
-  const fetchQuestions = async () => {
-    if (!id) return;
-    const qRef = collection(db, "exams", id, "questions");
-    const snapshot = await getDocs(qRef);
-    // Soruları tarihe göre sıralayabiliriz, şimdilik olduğu gibi çekiyoruz
-    const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    // Listeyi oluşturulma tarihine göre sırala (Eskiden yeniye)
-    list.sort((a: any, b: any) => a.createdAt?.seconds - b.createdAt?.seconds);
-    setQuestions(list);
-  };
 
   const handleAddQuestion = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -77,23 +70,35 @@ export default function ExamDetailPage() {
         imageUrl = await getDownloadURL(snapshot.ref);
       }
 
-      const questionData = {
+      // Yeni soruyu bir obje olarak hazırlıyoruz
+      const newQuestion = {
+        id: Date.now().toString(), // Benzersiz ID'yi biz veriyoruz
         text: qText,
-        category: category, // YENİ: Kategori kaydediliyor
+        category: category,
         options: options,
         correctOption: correct,
         imageUrl: imageUrl,
-        createdAt: new Date()
+        createdAt: new Date().toISOString() // JSON uyumlu tarih
       };
 
-      await addDoc(collection(db, "exams", id, "questions"), questionData);
+      // Mevcut soruların üzerine yenisini ekle
+      const updatedQuestions = [...questions, newQuestion];
 
+      // Veritabanını güncelle (Sadece exam dokümanını güncelliyoruz)
+      const examRef = doc(db, "exams", id);
+      await updateDoc(examRef, {
+        questions: updatedQuestions
+      });
+
+      // State'i güncelle (Ekran hemen değişsin diye)
+      setQuestions(updatedQuestions);
+
+      // Formu temizle
       setQText("");
       setOptions(["", "", "", "", ""]);
       setCorrect(0);
       setImageFile(null);
 
-      fetchQuestions();
       alert("Soru başarıyla eklendi!");
 
     } catch (error) {
@@ -112,8 +117,18 @@ export default function ExamDetailPage() {
 
   const handleDeleteQuestion = async (qId: string) => {
     if (!confirm("Bu soruyu silmek istediğine emin misin?")) return;
-    await deleteDoc(doc(db, "exams", id, "questions", qId));
-    fetchQuestions();
+
+    // Silinecek soruyu listeden çıkar
+    const updatedQuestions = questions.filter(q => q.id !== qId);
+
+    // Veritabanına yeni listeyi kaydet
+    const examRef = doc(db, "exams", id);
+    await updateDoc(examRef, {
+      questions: updatedQuestions
+    });
+
+    // Ekranı güncelle
+    setQuestions(updatedQuestions);
   };
 
   return (
@@ -142,7 +157,6 @@ export default function ExamDetailPage() {
             <h2 className="font-bold text-lg mb-4 text-blue-900">Yeni Soru Ekle</h2>
             <form onSubmit={handleAddQuestion} className="space-y-4">
 
-              {/* YENİ: Kategori Seçimi */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Ders Kategorisi</label>
                 <select
