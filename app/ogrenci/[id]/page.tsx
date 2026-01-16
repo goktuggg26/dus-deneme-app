@@ -41,8 +41,10 @@ export default function StudentExamPage() {
         const qRef = collection(db, "exams", id, "questions");
         const qSnap = await getDocs(qRef);
         const qList = qSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        // Soruları oluşturulma tarihine göre sırala (Yöneticiyle aynı sıra olsun)
-        qList.sort((a: any, b: any) => a.createdAt?.seconds - b.createdAt?.seconds);
+
+        // DÜZELTME 1: Sıralama yaparken tarih yoksa çökmesini engelledik (Güvenli Sıralama)
+        qList.sort((a: any, b: any) => (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0));
+
         setQuestions(qList);
       } catch (err) {
         console.error("Veri hatası:", err);
@@ -55,16 +57,19 @@ export default function StudentExamPage() {
 
   useEffect(() => {
     if (loading || !isExamStarted || timeLeft <= 0) return;
+
     const timer = setInterval(() => {
       setTimeLeft((prev) => {
         if (prev <= 1) {
           clearInterval(timer);
-          finishExam();
+          // DÜZELTME 2: Süre bittiyse (forceFinish = true) onayı atla
+          finishExam(true);
           return 0;
         }
         return prev - 1;
       });
     }, 1000);
+
     return () => clearInterval(timer);
   }, [loading, isExamStarted, timeLeft]);
 
@@ -90,9 +95,11 @@ export default function StudentExamPage() {
     setIsExamStarted(true);
   };
 
-  // --- YENİ PUANLAMA SİSTEMİ (TABLOYA GÖRE) ---
-  const finishExam = async () => {
-    if (timeLeft > 0 && !confirm("Sınavı bitirmek istediğinize emin misiniz?")) return;
+  // --- DÜZELTME 3: forceFinish parametresi eklendi (Zaman dolunca sormadan bitirir) ---
+  const finishExam = async (forceFinish = false) => {
+    // Eğer zorla bitirilmiyorsa (yani butona basıldıysa) ve süre varsa Onay İste
+    if (!forceFinish && timeLeft > 0 && !confirm("Sınavı bitirmek istediğinize emin misiniz?")) return;
+
     setLoading(true);
 
     let tbtCorrect = 0, tbtIncorrect = 0, tbtEmpty = 0;
@@ -100,7 +107,7 @@ export default function StudentExamPage() {
 
     questions.forEach(q => {
       const userAnswer = answers[q.id];
-      const category = q.category || "Temel"; // Kategori yoksa Temel say
+      const category = q.category || "Temel";
 
       const isCorrect = userAnswer === q.correctOption;
       const isEmpty = userAnswer === undefined;
@@ -111,24 +118,15 @@ export default function StudentExamPage() {
         else if (isCorrect) tbtCorrect++;
         else tbtIncorrect++;
       } else {
-        // Klinik
         if (isEmpty) kbtEmpty++;
         else if (isCorrect) kbtCorrect++;
         else kbtIncorrect++;
       }
     });
 
-    // NET HESABI (4 Yanlış 1 Doğruyu Götürür)
     const tbtNet = Math.max(0, tbtCorrect - (tbtIncorrect / 4));
     const kbtNet = Math.max(0, kbtCorrect - (kbtIncorrect / 4));
-
-    // TOPLAM NET
     const totalNet = tbtNet + kbtNet;
-
-    // --- TABLOYA GÖRE PUAN HESABI ---
-    // K Puanı = (TBT * 0.4) + (KBT * 0.6)
-    // T Puanı = (TBT * 0.6) + (KBT * 0.4)
-    // NOT: Gerçek DUS'ta standart sapma vardır ama burada ham net üzerinden katsayı uyguluyoruz.
 
     const scoreK = (tbtNet * 0.4) + (kbtNet * 0.6);
     const scoreT = (tbtNet * 0.6) + (kbtNet * 0.4);
@@ -138,15 +136,11 @@ export default function StudentExamPage() {
         examId: id,
         examTitle: examData.title,
         studentName: studentName,
-
-        // Detaylı İstatistikler
         tbt: { correct: tbtCorrect, incorrect: tbtIncorrect, empty: tbtEmpty, net: tbtNet },
         kbt: { correct: kbtCorrect, incorrect: kbtIncorrect, empty: kbtEmpty, net: kbtNet },
-
-        scoreK: scoreK, // K Puanı
-        scoreT: scoreT, // T Puanı
+        scoreK: scoreK,
+        scoreT: scoreT,
         totalNet: totalNet,
-
         date: new Date(),
         userAnswers: answers
       };
@@ -162,6 +156,16 @@ export default function StudentExamPage() {
   };
 
   if (loading) return <div className="h-screen flex items-center justify-center text-blue-600 font-bold">Yükleniyor...</div>;
+
+  // DÜZELTME 4: Eğer sorular yüklenmediyse veya boşsa çökmemesi için kontrol
+  if (isExamStarted && questions.length === 0) {
+    return (
+      <div className="h-screen flex flex-col items-center justify-center text-gray-500">
+        <h2 className="text-xl font-bold">Bu sınavda henüz soru yok.</h2>
+        <button onClick={() => router.push('/')} className="mt-4 text-blue-600 underline">Ana Sayfaya Dön</button>
+      </div>
+    );
+  }
 
   if (!isExamStarted) {
     return (
@@ -199,7 +203,6 @@ export default function StudentExamPage() {
           </span>
         </div>
 
-        {/* MOBİL İÇİN NAVİGASYON BUTONU */}
         <button onClick={() => setIsNavOpen(!isNavOpen)} className="md:hidden p-2 text-gray-600 bg-gray-100 rounded-lg">
           {isNavOpen ? "Soruyu Gör" : "Tüm Sorular"}
         </button>
@@ -217,17 +220,17 @@ export default function StudentExamPage() {
           <div className="max-w-3xl mx-auto bg-white rounded-2xl shadow-sm border border-gray-200 p-6 md:p-10 min-h-[500px] flex flex-col">
             <h2 className="text-lg md:text-xl font-semibold text-gray-900 mb-6 flex gap-3">
               <span className="text-blue-600 shrink-0">#{currentIndex + 1}</span>
-              <span>{currentQuestion.text}</span>
+              <span>{currentQuestion?.text}</span>
             </h2>
 
-            {currentQuestion.imageUrl && (
+            {currentQuestion?.imageUrl && (
               <div className="mb-6 flex justify-center">
                 <img src={currentQuestion.imageUrl} alt="Görsel" className="max-h-[300px] rounded-lg border object-contain" />
               </div>
             )}
 
             <div className="space-y-3 flex-1">
-              {currentQuestion.options.map((opt: string, idx: number) => {
+              {currentQuestion?.options.map((opt: string, idx: number) => {
                 const isSelected = answers[currentQuestion.id] === idx;
                 return (
                   <button
@@ -246,7 +249,6 @@ export default function StudentExamPage() {
               })}
             </div>
 
-            {/* İLERİ GERİ BUTONLARI */}
             <div className="flex justify-between mt-8 pt-6 border-t border-gray-100">
               <button
                 onClick={() => setCurrentIndex(prev => Math.max(0, prev - 1))}
@@ -288,7 +290,7 @@ export default function StudentExamPage() {
                     key={q.id}
                     onClick={() => {
                       setCurrentIndex(idx);
-                      setIsNavOpen(false); // Mobilde tıklandığında menüyü kapat
+                      setIsNavOpen(false);
                     }}
                     className={`h-10 rounded-lg text-sm font-bold transition-all border
                                     ${isCurrent ? 'border-2 border-blue-600 bg-blue-50 text-blue-700 ring-2 ring-blue-100' :
@@ -304,7 +306,7 @@ export default function StudentExamPage() {
 
           <div className="p-4 border-t border-gray-200 bg-gray-50">
             <button
-              onClick={finishExam}
+              onClick={() => finishExam(false)}
               className="w-full py-3 bg-green-600 text-white rounded-xl font-bold hover:bg-green-700 shadow-lg"
             >
               SINAVI BİTİR

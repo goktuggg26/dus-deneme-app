@@ -1,38 +1,27 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
-import { collection, query, orderBy, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { collection, getDocs, query, where, orderBy } from "firebase/firestore";
+import Link from "next/link";
 
-// Sınav verisinin tipini tanımlayalım (Swift'teki struct gibi)
-interface Exam {
-  id: string;
-  title: string;
-  duration: number;
-  isActive: boolean;
-}
-
-export default function Home() {
-  const [exams, setExams] = useState<Exam[]>([]);
+export default function HomePage() {
+  const [exams, setExams] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Sayfa açıldığında sınavları çek
   useEffect(() => {
     const fetchExams = async () => {
       try {
-        // Sınavları oluşturulma tarihine göre sıralayıp çek
+        // Sınavları çekiyoruz
         const q = query(collection(db, "exams"), orderBy("createdAt", "desc"));
         const querySnapshot = await getDocs(q);
-        
-        const examsList: Exam[] = [];
-        querySnapshot.forEach((doc) => {
-          examsList.push({ id: doc.id, ...doc.data() } as Exam);
-        });
-        
-        setExams(examsList);
+        const examList = querySnapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+        setExams(examList);
       } catch (error) {
-        console.error("Sınavlar çekilirken hata oluştu:", error);
+        console.error("Hata:", error);
       } finally {
         setLoading(false);
       }
@@ -43,73 +32,60 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col items-center p-6">
-      <main className="max-w-4xl w-full space-y-10">
-        
-        {/* Başlık Alanı */}
-        <div className="text-center space-y-2 mt-10">
-          <h1 className="text-4xl font-bold text-blue-900 tracking-tight">
-            DusNote Sınav Sistemi
-          </h1>
-          <p className="text-gray-500 text-lg">
-            Türkiye Geneli Deneme Sınavı Yönetim Paneli
-          </p>
-        </div>
 
-        {/* Üst Butonlar */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Link 
-            href="/create-exam" 
-            className="bg-white border-2 border-blue-100 rounded-xl hover:border-blue-500 hover:shadow-lg transition-all p-6 flex items-center justify-center gap-4 group"
-          >
-            <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-colors text-xl">
-              📝
-            </div>
-            <span className="font-semibold text-gray-700 text-lg">Yeni Sınav Oluştur</span>
-          </Link>
+      {/* BAŞLIK VE LOGO ALANI */}
+      <div className="text-center mb-10 mt-6 space-y-2">
+        <div className="text-6xl mb-2">🦷</div>
+        <h1 className="text-3xl font-extrabold text-blue-900">Online DUS Deneme</h1>
+        <p className="text-gray-500">Başarıya giden yolda kendini test et.</p>
+      </div>
 
-          <Link 
-  href="/results" 
-  className="h-32 bg-white border-2 border-green-100 rounded-xl hover:border-green-500 hover:shadow-lg transition-all group p-6 flex flex-col items-center justify-center gap-3"
->
-  <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center group-hover:bg-green-600 group-hover:text-white transition-colors text-2xl">
-    📊
-  </div>
-  <span className="font-semibold text-gray-700">Sonuçları Gör</span>
-</Link>
-        </div>
+      {/* SINAV LİSTESİ */}
+      <div className="w-full max-w-4xl">
+        <h2 className="text-xl font-bold text-gray-800 mb-4 ml-2 border-l-4 border-blue-600 pl-3">Aktif Sınavlar</h2>
 
-        {/* Sınav Listesi */}
-        <div className="space-y-4">
-          <h2 className="text-xl font-bold text-gray-800 border-b pb-2">Oluşturulmuş Sınavlar</h2>
-          
-          {loading ? (
-            <p className="text-gray-500 text-center py-4">Yükleniyor...</p>
-          ) : exams.length === 0 ? (
-            <div className="text-center py-10 bg-white rounded-xl border border-dashed border-gray-300">
-              <p className="text-gray-500">Henüz hiç sınav oluşturulmamış.</p>
-            </div>
-          ) : (
-            <div className="grid gap-4">
-              {exams.map((exam) => (
-                <Link 
-                  key={exam.id} 
-                  href={`/exam/${exam.id}`} // Tıklayınca detay sayfasına gidecek
-                  className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md hover:border-blue-300 transition-all flex justify-between items-center"
+        {loading ? (
+          <div className="text-center py-10 text-gray-400">Yükleniyor...</div>
+        ) : exams.length === 0 ? (
+          <div className="bg-white p-8 rounded-xl shadow-sm text-center text-gray-500">
+            Henüz aktif bir sınav bulunmuyor.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {exams.map((exam) => (
+              <div key={exam.id} className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow flex flex-col justify-between h-full">
+                <div>
+                  <h3 className="text-xl font-bold text-gray-800 mb-2">{exam.title}</h3>
+                  <div className="text-sm text-gray-500 space-y-1 mb-4">
+                    <p>⏱️ Süre: {exam.duration} Dakika</p>
+                    {/* Tarihi güvenli gösterme */}
+                    <p>📅 Tarih: {exam.startTime?.toDate ? exam.startTime.toDate().toLocaleDateString('tr-TR') : new Date(exam.startTime).toLocaleDateString('tr-TR')}</p>
+                  </div>
+                </div>
+
+                {/* BURASI ÇOK ÖNEMLİ: Link direkt öğrenci sayfasına gidiyor */}
+                <Link
+                  href={`/ogrenci/${exam.id}`}
+                  className="block w-full text-center bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700 transition-colors"
                 >
-                  <div>
-                    <h3 className="font-bold text-lg text-gray-800">{exam.title}</h3>
-                    <p className="text-sm text-gray-500">Süre: {exam.duration} dk</p>
-                  </div>
-                  <div className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-400">
-                    ➔
-                  </div>
+                  Sınava Başla 🚀
                 </Link>
-              ))}
-            </div>
-          )}
-        </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
-      </main>
+      {/* ALT BİLGİ VE YÖNETİCİ LİNKİ */}
+      <div className="mt-16 text-center">
+        <p className="text-gray-400 text-sm mb-4">Bu proje DUS öğrencileri için hazırlanmıştır.</p>
+
+        {/* GİZLİ YÖNETİCİ KAPISI */}
+        <Link href="/login" className="text-xs text-gray-300 hover:text-gray-500 transition-colors border-b border-gray-200 pb-0.5">
+          Yönetici Girişi
+        </Link>
+      </div>
+
     </div>
   );
 }
