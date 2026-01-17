@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { db } from "@/lib/firebase";
-import { doc, getDoc, collection, addDoc } from "firebase/firestore"; // collection sadece sonuç kaydetmek için kaldı
+import { doc, getDoc, collection, addDoc } from "firebase/firestore";
 import { useParams, useRouter } from "next/navigation";
 
 export default function StudentExamPage() {
@@ -34,7 +34,7 @@ export default function StudentExamPage() {
           setExamData(data);
           setTimeLeft(data.duration * 60);
 
-          // YENİ KISIM: Soruları direkt veriden alıyoruz, başka sorgu yok!
+          // Soruları direkt veriden alıyoruz
           const qList = data.questions || [];
           setQuestions(qList);
         } else {
@@ -96,29 +96,55 @@ export default function StudentExamPage() {
     let tbtCorrect = 0, tbtIncorrect = 0, tbtEmpty = 0;
     let kbtCorrect = 0, kbtIncorrect = 0, kbtEmpty = 0;
 
+    // YENİ: Ders Bazlı İstatistik Tutucu
+    // Yapı: { "Anatomi": {correct: 0, incorrect: 0, empty: 0, total: 0}, ... }
+    let detailedStats: any = {};
+
     questions.forEach(q => {
       const userAnswer = answers[q.id];
       const category = q.category || "Temel";
+      // Eski sorularda lesson alanı olmayabilir, onlara "Genel" veya kategori adını veriyoruz
+      const lesson = q.lesson || "Genel";
 
       const isCorrect = userAnswer === q.correctOption;
       const isEmpty = userAnswer === undefined;
+      // Yanlış: Boş değilse ve doğru değilse yanlıştır
       const isWrong = !isEmpty && !isCorrect;
 
+      // 1. GENEL PUAN HESAPLAMA (TBT / KBT)
       if (category === "Temel") {
         if (isEmpty) tbtEmpty++;
         else if (isCorrect) tbtCorrect++;
         else tbtIncorrect++;
       } else {
+        // Klinik
         if (isEmpty) kbtEmpty++;
         else if (isCorrect) kbtCorrect++;
         else kbtIncorrect++;
       }
+
+      // 2. DERS DETAYLI İSTATİSTİK HESAPLAMA
+      if (!detailedStats[lesson]) {
+        detailedStats[lesson] = { correct: 0, incorrect: 0, empty: 0, total: 0, category: category };
+      }
+
+      detailedStats[lesson].total += 1;
+
+      if (isEmpty) {
+        detailedStats[lesson].empty++;
+      } else if (isCorrect) {
+        detailedStats[lesson].correct++;
+      } else {
+        detailedStats[lesson].incorrect++;
+      }
     });
 
+    // NET HESABI (4 Yanlış 1 Doğruyu Götürür)
     const tbtNet = Math.max(0, tbtCorrect - (tbtIncorrect / 4));
     const kbtNet = Math.max(0, kbtCorrect - (kbtIncorrect / 4));
     const totalNet = tbtNet + kbtNet;
 
+    // PUAN HESABI
     const scoreK = (tbtNet * 0.4) + (kbtNet * 0.6);
     const scoreT = (tbtNet * 0.6) + (kbtNet * 0.4);
 
@@ -127,11 +153,18 @@ export default function StudentExamPage() {
         examId: id,
         examTitle: examData.title,
         studentName: studentName,
+
+        // Genel İstatistikler
         tbt: { correct: tbtCorrect, incorrect: tbtIncorrect, empty: tbtEmpty, net: tbtNet },
         kbt: { correct: kbtCorrect, incorrect: kbtIncorrect, empty: kbtEmpty, net: kbtNet },
+
+        // YENİ: Ders Detayları
+        detailedStats: detailedStats,
+
         scoreK: scoreK,
         scoreT: scoreT,
         totalNet: totalNet,
+
         date: new Date(),
         userAnswers: answers
       };
@@ -188,9 +221,17 @@ export default function StudentExamPage() {
       <div className="bg-white border-b border-gray-200 px-6 py-3 flex justify-between items-center shrink-0 h-16">
         <div>
           <h1 className="font-bold text-gray-800">{examData?.title}</h1>
-          <span className="text-xs font-bold px-2 py-0.5 rounded bg-gray-100 text-gray-600">
-            {currentQuestion?.category || "Genel"}
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold px-2 py-0.5 rounded bg-gray-100 text-gray-600">
+              {currentQuestion?.category || "Genel"}
+            </span>
+            {/* YENİ: Ders Adını Göster */}
+            {currentQuestion?.lesson && (
+              <span className="text-xs font-bold px-2 py-0.5 rounded bg-blue-50 text-blue-600 border border-blue-100">
+                {currentQuestion.lesson}
+              </span>
+            )}
+          </div>
         </div>
 
         <button onClick={() => setIsNavOpen(!isNavOpen)} className="md:hidden p-2 text-gray-600 bg-gray-100 rounded-lg">

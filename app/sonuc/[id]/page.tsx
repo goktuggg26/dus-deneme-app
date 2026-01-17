@@ -13,9 +13,32 @@ export default function ResultPage() {
     const [result, setResult] = useState<any>(null);
     const [questions, setQuestions] = useState<any[]>([]);
 
-    // YENİ: Sıralama Listesi State'i
+    // Sıralama Listesi State'i
     const [rankings, setRankings] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+
+    // Ders Listeleri (Sıralı Gösterim İçin)
+    const TEMEL_LESSONS = [
+        "Anatomi",
+        "Histoloji-Embriyoloji",
+        "Fizyoloji",
+        "Biyokimya",
+        "Mikrobiyoloji",
+        "Patoloji",
+        "Farmakoloji",
+        "Tıbbi Biyoloji ve Genetik"
+    ];
+
+    const KLINIK_LESSONS = [
+        "Restoratif Diş Tedavisi",
+        "Protetik Diş Tedavisi",
+        "Ağız Diş ve Çene Cerrahisi",
+        "Ağız Diş ve Çene Radyolojisi",
+        "Periodontoloji",
+        "Ortodonti",
+        "Endodonti",
+        "Çocuk Diş Hekimliği"
+    ];
 
     useEffect(() => {
         const fetchAllData = async () => {
@@ -37,8 +60,7 @@ export default function ResultPage() {
                             setQuestions(examSnap.data().questions || []);
                         }
 
-                        // 3. SIRALAMAYI ÇEK (Aynı sınava giren herkesi getir)
-                        // Toplam Net'e göre çoktan aza sırala
+                        // 3. SIRALAMAYI ÇEK
                         const qRanking = query(
                             collection(db, "results"),
                             where("examId", "==", resultData.examId),
@@ -66,8 +88,7 @@ export default function ResultPage() {
     if (!result) return <div className="h-screen flex items-center justify-center">Sonuç bulunamadı.</div>;
 
     const userAnswers = result.userAnswers || {};
-
-    // Öğrencinin sıralamadaki yerini bul
+    const detailedStats = result.detailedStats || {}; // Ders detayları
     const myRank = rankings.findIndex(r => r.id === id) + 1;
 
     return (
@@ -102,8 +123,72 @@ export default function ResultPage() {
                         </div>
                     </div>
 
-                    {/* NET TABLOSU */}
-                    <div className="overflow-x-auto">
+                    {/* --- YENİ: DERS DETAY TABLOSU --- */}
+                    <div className="overflow-x-auto mt-8">
+                        <h3 className="font-bold text-lg mb-4 text-gray-800 border-l-4 border-blue-600 pl-3">
+                            Ders Ders Analiz
+                        </h3>
+                        <table className="w-full border-collapse text-center text-sm">
+                            <thead>
+                                <tr className="bg-gray-100 text-gray-600">
+                                    <th className="p-3 text-left pl-6">Ders Adı</th>
+                                    <th className="p-3">Soru</th>
+                                    <th className="p-3 text-green-600">D</th>
+                                    <th className="p-3 text-red-600">Y</th>
+                                    <th className="p-3 text-gray-400">B</th>
+                                    <th className="p-3 font-bold text-black">NET</th>
+                                    <th className="p-3">Başarı</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                                {/* TEMEL DERSLER */}
+                                {TEMEL_LESSONS.map(lesson => {
+                                    const stat = detailedStats[lesson] || { total: 0, correct: 0, incorrect: 0, empty: 0 };
+                                    if (stat.total === 0) return null; // Soru yoksa gösterme
+
+                                    const net = Math.max(0, stat.correct - (stat.incorrect / 4));
+                                    const percent = (net / stat.total) * 100;
+
+                                    return (
+                                        <tr key={lesson} className="hover:bg-blue-50 transition-colors">
+                                            <td className="p-3 text-left pl-6 font-medium text-gray-700 border-l-4 border-transparent hover:border-blue-400">{lesson}</td>
+                                            <td className="p-3 text-gray-500">{stat.total}</td>
+                                            <td className="p-3 text-green-600 font-bold">{stat.correct}</td>
+                                            <td className="p-3 text-red-600">{stat.incorrect}</td>
+                                            <td className="p-3 text-gray-400">{stat.empty}</td>
+                                            <td className="p-3 font-bold text-blue-900">{net.toFixed(2)}</td>
+                                            <td className="p-3 text-xs text-gray-500">%{percent.toFixed(0)}</td>
+                                        </tr>
+                                    );
+                                })}
+
+                                {/* KLİNİK DERSLER */}
+                                {KLINIK_LESSONS.map(lesson => {
+                                    const stat = detailedStats[lesson] || { total: 0, correct: 0, incorrect: 0, empty: 0 };
+                                    if (stat.total === 0) return null;
+
+                                    const net = Math.max(0, stat.correct - (stat.incorrect / 4));
+                                    const percent = (net / stat.total) * 100;
+
+                                    return (
+                                        <tr key={lesson} className="hover:bg-orange-50 transition-colors">
+                                            <td className="p-3 text-left pl-6 font-medium text-gray-700 border-l-4 border-transparent hover:border-orange-400">{lesson}</td>
+                                            <td className="p-3 text-gray-500">{stat.total}</td>
+                                            <td className="p-3 text-green-600 font-bold">{stat.correct}</td>
+                                            <td className="p-3 text-red-600">{stat.incorrect}</td>
+                                            <td className="p-3 text-gray-400">{stat.empty}</td>
+                                            <td className="p-3 font-bold text-orange-900">{net.toFixed(2)}</td>
+                                            <td className="p-3 text-xs text-gray-500">%{percent.toFixed(0)}</td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {/* GENEL NET TABLOSU */}
+                    <div className="overflow-x-auto mt-6 pt-6 border-t border-gray-100">
+                        <h4 className="font-bold text-gray-600 mb-2 pl-2 text-sm">Genel Özet</h4>
                         <table className="w-full border-collapse text-center text-sm md:text-base">
                             <thead>
                                 <tr className="bg-gray-100 text-gray-600">
@@ -141,7 +226,7 @@ export default function ResultPage() {
                     </div>
                 </div>
 
-                {/* --- YENİ BÖLÜM: CANLI SIRALAMA TABLOSU --- */}
+                {/* --- CANLI SIRALAMA TABLOSU --- */}
                 <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
                     <div className="p-6 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
                         <h2 className="text-xl font-bold text-gray-800">📊 Genel Sıralama</h2>
@@ -193,8 +278,17 @@ export default function ResultPage() {
 
                         return (
                             <div key={q.id} className={`bg-white rounded-xl shadow-sm border-2 p-6 transition-all relative ${isCorrect ? 'border-green-100' : isWrong ? 'border-red-100' : 'border-gray-200'}`}>
-                                <div className="absolute top-0 right-0 bg-gray-100 text-gray-500 text-[10px] font-bold px-2 py-1 rounded-bl-lg uppercase">
-                                    {q.category || "Temel"}
+                                <div className="absolute top-0 right-0 flex gap-1">
+                                    {/* DERS ETİKETİ */}
+                                    {q.lesson && (
+                                        <div className="bg-blue-50 text-blue-600 text-[10px] font-bold px-2 py-1 border-l border-b border-blue-100 rounded-bl-lg uppercase">
+                                            {q.lesson}
+                                        </div>
+                                    )}
+                                    {/* KATEGORİ ETİKETİ */}
+                                    <div className="bg-gray-100 text-gray-500 text-[10px] font-bold px-2 py-1 rounded-bl-lg uppercase">
+                                        {q.category || "Temel"}
+                                    </div>
                                 </div>
                                 <div className="flex justify-between items-start mb-4">
                                     <h3 className="text-lg font-semibold text-gray-800 flex-1 pr-8">
