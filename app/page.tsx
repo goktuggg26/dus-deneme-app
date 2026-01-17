@@ -47,7 +47,6 @@ export default function HomePage() {
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col items-center p-6">
 
-      {/* BAŞLIK */}
       <div className="text-center mb-10 mt-6 space-y-2">
         <div className="text-6xl mb-2">🦷</div>
         <h1 className="text-3xl font-extrabold text-blue-900">Online DUS Deneme</h1>
@@ -62,7 +61,6 @@ export default function HomePage() {
         )}
       </div>
 
-      {/* SINAV LİSTESİ */}
       <div className="w-full max-w-4xl">
         <h2 className="text-xl font-bold text-gray-800 mb-4 ml-2 border-l-4 border-blue-600 pl-3">Aktif Sınavlar</h2>
 
@@ -74,54 +72,75 @@ export default function HomePage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {exams.map((exam) => (
-              <div key={exam.id} className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-all flex flex-col justify-between h-full relative group">
+            {exams.map((exam) => {
+              // SÜRE KONTROLÜ
+              // Eğer endDate varsa ve şu anki zaman endDate'den büyükse sınav bitmiştir.
+              const endDate = exam.endDate?.toDate ? exam.endDate.toDate() : new Date(exam.endDate);
+              const isExpired = new Date() > endDate;
 
-                {isAdmin && (
-                  <button
-                    onClick={() => handleDeleteExam(exam.id)}
-                    className="absolute top-4 right-4 text-gray-300 hover:text-red-600 transition-colors"
-                    title="Sınavı Sil"
-                  >
-                    🗑 Sil
-                  </button>
-                )}
+              return (
+                <div key={exam.id} className={`bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-between h-full relative group transition-all ${isExpired ? 'opacity-80' : 'hover:shadow-md'}`}>
 
-                <div>
-                  <h3 className="text-xl font-bold text-gray-800 mb-2 pr-8">{exam.title}</h3>
-                  <div className="text-sm text-gray-500 space-y-1 mb-4">
-                    <p>⏱️ Süre: {exam.duration} Dakika</p>
-                    <p>📅 Tarih: {exam.startTime?.toDate ? exam.startTime.toDate().toLocaleDateString('tr-TR') : new Date(exam.startTime).toLocaleDateString('tr-TR')}</p>
-                    <p className="text-xs bg-gray-100 inline-block px-2 py-1 rounded mt-1">Soru Sayısı: {exam.questions?.length || 0}</p>
+                  {isAdmin && (
+                    <button
+                      onClick={() => handleDeleteExam(exam.id)}
+                      className="absolute top-4 right-4 text-gray-300 hover:text-red-600 transition-colors"
+                      title="Sınavı Sil"
+                    >
+                      🗑 Sil
+                    </button>
+                  )}
+
+                  <div>
+                    <div className="flex justify-between items-start pr-8">
+                      <h3 className="text-xl font-bold text-gray-800 mb-2">{exam.title}</h3>
+                      {isExpired && (
+                        <span className="bg-red-100 text-red-600 text-[10px] font-bold px-2 py-1 rounded">SÜRE DOLDU</span>
+                      )}
+                    </div>
+
+                    <div className="text-sm text-gray-500 space-y-1 mb-4">
+                      <p>⏱️ Süre: {exam.duration} Dakika</p>
+                      <p className="flex items-center gap-1">
+                        📅 Bitiş: <span className={isExpired ? "text-red-500 font-bold" : "text-gray-700"}>
+                          {endDate.toLocaleString('tr-TR', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </p>
+                      <p className="text-xs bg-gray-100 inline-block px-2 py-1 rounded mt-1">Soru Sayısı: {exam.questions?.length || 0}</p>
+                    </div>
                   </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    {/* BAŞLA BUTONU: Süre dolduysa Pasif, dolmadıysa Aktif */}
+                    {isExpired ? (
+                      <button disabled className="col-span-2 md:col-span-1 flex items-center justify-center bg-gray-300 text-white py-3 rounded-lg font-bold cursor-not-allowed">
+                        Erişim Kapandı 🔒
+                      </button>
+                    ) : (
+                      <Link
+                        href={`/ogrenci/${exam.id}`}
+                        className="col-span-2 md:col-span-1 flex items-center justify-center bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700 transition-colors"
+                      >
+                        Başla 🚀
+                      </Link>
+                    )}
+
+                    <Link
+                      href={`/siralama/${exam.id}`}
+                      className="col-span-2 md:col-span-1 flex items-center justify-center bg-gray-100 text-gray-700 py-3 rounded-lg font-bold hover:bg-gray-200 transition-colors border border-gray-200"
+                    >
+                      🏆 Sıralama
+                    </Link>
+                  </div>
+
+                  {isAdmin && (
+                    <Link href={`/exam/${exam.id}`} className="block w-full text-center text-sm text-gray-500 hover:text-blue-600 mt-2">
+                      Soruları Düzenle
+                    </Link>
+                  )}
                 </div>
-
-                {/* BUTONLAR ALANI */}
-                <div className="grid grid-cols-2 gap-2">
-                  {/* Sınava Başla (Mavi) */}
-                  <Link
-                    href={`/ogrenci/${exam.id}`}
-                    className="col-span-2 md:col-span-1 flex items-center justify-center bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700 transition-colors"
-                  >
-                    Başla 🚀
-                  </Link>
-
-                  {/* Sıralamayı Gör (Gri) */}
-                  <Link
-                    href={`/siralama/${exam.id}`}
-                    className="col-span-2 md:col-span-1 flex items-center justify-center bg-gray-100 text-gray-700 py-3 rounded-lg font-bold hover:bg-gray-200 transition-colors border border-gray-200"
-                  >
-                    🏆 Sıralama
-                  </Link>
-                </div>
-
-                {isAdmin && (
-                  <Link href={`/exam/${exam.id}`} className="block w-full text-center text-sm text-gray-500 hover:text-blue-600 mt-2">
-                    Soruları Düzenle
-                  </Link>
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

@@ -31,6 +31,19 @@ export default function StudentExamPage() {
         const examSnap = await getDoc(doc(db, "exams", id));
         if (examSnap.exists()) {
           const data = examSnap.data();
+
+          // --- GÜVENLİK KONTROLÜ: SÜRE BİTMİŞ Mİ? ---
+          // Eğer sınavın bir bitiş tarihi varsa ve şu anki zaman onu geçmişse içeri alma.
+          if (data.endDate) {
+            const endDate = data.endDate.toDate ? data.endDate.toDate() : new Date(data.endDate);
+            if (new Date() > endDate) {
+              alert("Üzgünüz, bu sınavın erişim süresi dolmuştur. Sadece sonuçları görebilirsiniz.");
+              router.push("/"); // Ana sayfaya at
+              return;
+            }
+          }
+          // ------------------------------------------
+
           setExamData(data);
           setTimeLeft(data.duration * 60);
 
@@ -97,19 +110,15 @@ export default function StudentExamPage() {
     let kbtCorrect = 0, kbtIncorrect = 0, kbtEmpty = 0;
 
     // YENİ: Ders Bazlı İstatistik Tutucu
-    // Yapı: { "Anatomi": {correct: 0, incorrect: 0, empty: 0, total: 0}, ... }
     let detailedStats: any = {};
 
     questions.forEach(q => {
       const userAnswer = answers[q.id];
       const category = q.category || "Temel";
-      // Eski sorularda lesson alanı olmayabilir, onlara "Genel" veya kategori adını veriyoruz
       const lesson = q.lesson || "Genel";
 
       const isCorrect = userAnswer === q.correctOption;
       const isEmpty = userAnswer === undefined;
-      // Yanlış: Boş değilse ve doğru değilse yanlıştır
-      const isWrong = !isEmpty && !isCorrect;
 
       // 1. GENEL PUAN HESAPLAMA (TBT / KBT)
       if (category === "Temel") {
@@ -139,12 +148,10 @@ export default function StudentExamPage() {
       }
     });
 
-    // NET HESABI (4 Yanlış 1 Doğruyu Götürür)
     const tbtNet = Math.max(0, tbtCorrect - (tbtIncorrect / 4));
     const kbtNet = Math.max(0, kbtCorrect - (kbtIncorrect / 4));
     const totalNet = tbtNet + kbtNet;
 
-    // PUAN HESABI
     const scoreK = (tbtNet * 0.4) + (kbtNet * 0.6);
     const scoreT = (tbtNet * 0.6) + (kbtNet * 0.4);
 
@@ -158,7 +165,7 @@ export default function StudentExamPage() {
         tbt: { correct: tbtCorrect, incorrect: tbtIncorrect, empty: tbtEmpty, net: tbtNet },
         kbt: { correct: kbtCorrect, incorrect: kbtIncorrect, empty: kbtEmpty, net: kbtNet },
 
-        // YENİ: Ders Detayları
+        // Ders Detayları
         detailedStats: detailedStats,
 
         scoreK: scoreK,
@@ -225,7 +232,6 @@ export default function StudentExamPage() {
             <span className="text-xs font-bold px-2 py-0.5 rounded bg-gray-100 text-gray-600">
               {currentQuestion?.category || "Genel"}
             </span>
-            {/* YENİ: Ders Adını Göster */}
             {currentQuestion?.lesson && (
               <span className="text-xs font-bold px-2 py-0.5 rounded bg-blue-50 text-blue-600 border border-blue-100">
                 {currentQuestion.lesson}
