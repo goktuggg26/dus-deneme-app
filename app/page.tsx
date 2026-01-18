@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { db } from "@/lib/firebase";
 import { collection, getDocs, query, orderBy, deleteDoc, doc } from "firebase/firestore";
 import Link from "next/link";
+import DusNoteAd from "@/components/DusNoteAd";
 
 export default function HomePage() {
   const [exams, setExams] = useState<any[]>([]);
@@ -60,6 +61,8 @@ export default function HomePage() {
           </div>
         )}
       </div>
+
+      <DusNoteAd />
 
       <div className="w-full max-w-4xl">
         <h2 className="text-xl font-bold text-gray-800 mb-4 ml-2 border-l-4 border-blue-600 pl-3">Aktif Sınavlar</h2>
